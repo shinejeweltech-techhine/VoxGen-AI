@@ -1,58 +1,44 @@
-import { GoogleGenAI, Modality } from "@google/genai";
-import { VoiceName } from "../types";
-import { base64ToUint8Array, createWavBlob, decodeAudioData } from "./audioUtils";
+// This service now handles Browser Native TTS instead of Gemini API
 
-// Safely retrieve API key, handling environments where process might be undefined
-const API_KEY = (typeof process !== 'undefined' && process.env && process.env.API_KEY) || '';
-
-if (!API_KEY) {
-  console.warn("API_KEY is missing from environment variables. Speech generation will fail.");
-}
-
-const ai = new GoogleGenAI({ apiKey: API_KEY });
-
-export async function generateSpeech(text: string, voice: VoiceName): Promise<{ blob: Blob; url: string }> {
-  try {
-    if (!API_KEY) {
-      throw new Error("API Key is missing. Please configure your environment variables.");
+export const getAvailableVoices = (): Promise<SpeechSynthesisVoice[]> => {
+  return new Promise((resolve) => {
+    let voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      resolve(voices);
+      return;
     }
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: voice },
-          },
-        },
-      },
-    });
-
-    const candidate = response.candidates?.[0];
-    const parts = candidate?.content?.parts;
     
-    // Check if we have audio data
-    const inlineData = parts?.[0]?.inlineData;
-    
-    if (!inlineData || !inlineData.data) {
-       throw new Error("No audio data received from Gemini API.");
-    }
+    // Voices load asynchronously in some browsers (like Chrome)
+    window.speechSynthesis.onvoiceschanged = () => {
+      voices = window.speechSynthesis.getVoices();
+      resolve(voices);
+    };
+  });
+};
 
-    const base64Audio = inlineData.data;
-    const uint8Array = base64ToUint8Array(base64Audio);
-    
-    // Decode PCM to Float32 to create a proper WAV file
-    // Gemini TTS typically returns 24000Hz sample rate for these models
-    const audioData = await decodeAudioData(uint8Array, 24000);
-    const wavBlob = createWavBlob(audioData, 24000);
-    const url = URL.createObjectURL(wavBlob);
+export const speakText = (text: string, voice: SpeechSynthesisVoice | null, onEnd?: () => void, onError?: (e: any) => void) => {
+  // Cancel any current speaking
+  window.speechSynthesis.cancel();
 
-    return { blob: wavBlob, url };
-
-  } catch (error) {
-    console.error("Error generating speech:", error);
-    throw error;
+  const utterance = new SpeechSynthesisUtterance(text);
+  
+  if (voice) {
+    utterance.voice = voice;
   }
-}
+
+  utterance.onend = () => {
+    if (onEnd) onEnd();
+  };
+
+  utterance.onerror = (e) => {
+    console.error("Speech synthesis error:", e);
+    if (onError) onError(e);
+  };
+
+  window.speechSynthesis.speak(utterance);
+  return utterance;
+};
+
+export const stopSpeaking = () => {
+  window.speechSynthesis.cancel();
+};
