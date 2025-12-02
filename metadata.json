@@ -1,0 +1,5 @@
+{
+  "name": "VoxGen AI",
+  "description": "A premium text-to-speech application using Gemini 2.5 Flash TTS with multiple lifelike voices and downloadable audio.",
+  "requestFramePermissions": []
+}
