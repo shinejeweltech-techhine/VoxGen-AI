@@ -2,16 +2,21 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import { VoiceName } from "../types";
 import { base64ToUint8Array, createWavBlob, decodeAudioData } from "./audioUtils";
 
-const API_KEY = process.env.API_KEY || '';
+// Safely retrieve API key, handling environments where process might be undefined
+const API_KEY = (typeof process !== 'undefined' && process.env && process.env.API_KEY) || '';
 
 if (!API_KEY) {
-  console.error("API_KEY is missing from environment variables.");
+  console.warn("API_KEY is missing from environment variables. Speech generation will fail.");
 }
 
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 export async function generateSpeech(text: string, voice: VoiceName): Promise<{ blob: Blob; url: string }> {
   try {
+    if (!API_KEY) {
+      throw new Error("API Key is missing. Please configure your environment variables.");
+    }
+
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text }] }],
